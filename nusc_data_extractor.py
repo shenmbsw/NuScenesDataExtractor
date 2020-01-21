@@ -87,7 +87,7 @@ class NuScenesDataExtractor:
         chan = sd_record['channel']
         pc, times = LidarPointCloud.from_file_multisweep(self.nusc, self.sample, chan, channel, nsweeps)
         times_interval = np.unique(times)[::-1]
-        unique_times = self.get_timestamp() - times_interval.astype(np.int)
+        unique_times = self.get_timestamp() - (times_interval*1e6).astype(np.int)
         points = []
         for t in times_interval:
             points.append(pc.points[:, times[0] == t])
