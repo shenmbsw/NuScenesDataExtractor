@@ -6,7 +6,7 @@ from pyquaternion import Quaternion
 
 from nuscenes.nuscenes import NuScenes
 from nuscenes.utils.data_classes import LidarPointCloud, RadarPointCloud
-from nuscenes.utils.geometry_utils import view_points
+from nuscenes.utils.geometry_utils import view_points, points_in_box
 
 
 class NuScenesDataExtractor:
@@ -71,6 +71,25 @@ class NuScenesDataExtractor:
         print(" [*] Camera image extracted.")
         return image
 
+    def get_lidar_instances(self, nsweeps=1,  enlarge=1):
+        channel = 'LIDAR_TOP'
+        sample_data_token = self.sample['data'][channel]
+        sd_record = self.nusc.get('sample_data', sample_data_token)
+        _, boxes, _ = self.nusc.get_sample_data(sample_data_token, use_flat_vehicle_coordinates=False)
+
+        # Get aggregated point cloud in lidar frame.
+        chan = sd_record['channel']
+        pc, _ = LidarPointCloud.from_file_multisweep(self.nusc, self.sample, chan, channel, nsweeps)
+        points = pc.points
+        anno_points = []
+        anno_boxes = []
+        for box in boxes:
+            mask = points_in_box(box, points[0:3, :], wlh_factor=enlarge)
+            if True in mask:
+                anno_points.append(points[:, mask])
+                anno_boxes.append(box)
+        return anno_points, anno_boxes
+
     def get_each_sweep_lidar_pointcloud(self, nsweeps=5):
         """
         Extracting lidar pointcloud for current timestep in current scene
@@ -87,7 +106,7 @@ class NuScenesDataExtractor:
         chan = sd_record['channel']
         pc, times = LidarPointCloud.from_file_multisweep(self.nusc, self.sample, chan, channel, nsweeps)
         times_interval = np.unique(times)[::-1]
-        unique_times = self.get_timestamp() - (times_interval*1e6).astype(np.int)
+        unique_times = self.get_timestamp() - (times_interval * 1e6).astype(np.int)
         points = []
         for t in times_interval:
             points.append(pc.points[:, times[0] == t])
@@ -107,6 +126,7 @@ class NuScenesDataExtractor:
         chan = sd_record['channel']
         pc, times = LidarPointCloud.from_file_multisweep(self.nusc, self.sample, chan, channel, nsweeps)
         points = np.concatenate([pc.points, times], axis=0)
+
         return points
 
     def get_all_radar_pointclouds(self):
